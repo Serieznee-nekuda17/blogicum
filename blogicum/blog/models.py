@@ -44,7 +44,7 @@ class Post(BaseModel):
     class Meta:
         verbose_name = 'публикация'
         verbose_name_plural = 'Публикации'
-        ordering = ['-pub_date']
+        ordering = ('-pub_date',)
 
     def __str__(self):
         return self.title
@@ -93,6 +93,7 @@ class Comment(models.Model):
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
+        related_name='comments', 
         verbose_name='Автор'
     )
     text = models.TextField(verbose_name='Текст комментария')
@@ -102,4 +103,9 @@ class Comment(models.Model):
     )
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ('created_at',)
+        verbose_name = 'комментарий'
+        verbose_name_plural = 'Комментарии'
+
+    def __str__(self):
+        return f'Комментарий от {self.author}'
