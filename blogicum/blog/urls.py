@@ -24,7 +24,7 @@ urlpatterns = [
     path('posts/', include(post_urls,)),
     path('category/<slug:category_slug>/',
          views.CategoryPostView.as_view(), name='category_posts'),
-    path('profile/edit-profile/',
+    path('edit-profile/',
          views.EditProfileView.as_view(), name='edit_profile'),
     path('profile/<str:username>/',
          views.UserProfileView.as_view(), name='profile'),

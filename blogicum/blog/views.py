@@ -6,13 +6,14 @@ from django.utils.timezone import now
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
 
 from blog.models import Category, Comment, Post
 from .forms import CommentForm, PostForm
+from .mixins import AuthorPermissionMixin
 from django.conf import settings
 
 
@@ -32,21 +33,10 @@ def get_post_queryset(apply_filters=False, apply_annotations=True):
     return queryset
 
 
-class AuthorPermissionMixin(UserPassesTestMixin):
-    """Mixin to check if the user is the author of the post."""
-
-    def test_func(self):
-        post = self.get_object()
-        return post.author == self.request.user
-
-    def handle_no_permission(self):
-        return redirect('blog:post_detail', post_id=self.kwargs['post_id'])
-
-
 class UserProfileView(ListView):
     """A view for displaying the user's profile."""
 
-    paginate_by = settings.CONST
+    paginate_by = settings.PAGINATION_SIZE
     template_name = 'blog/profile.html'
 
     def get_user_profile(self):
@@ -55,17 +45,11 @@ class UserProfileView(ListView):
     def get_queryset(self):
         user_profile = self.get_user_profile()
 
-        if self.request.user == user_profile:
-            queryset = get_post_queryset(apply_filters=False)
-        else:
-            queryset = get_post_queryset(apply_filters=True)
-
-        return (
-            queryset
-            .filter(author=user_profile)
-            .annotate(comment_count=Count('comments'))
-            .order_by('-pub_date')
+        queryset = get_post_queryset(
+            apply_filters=self.request.user != user_profile,
+            apply_annotations=True
         )
+        return queryset.filter(author=user_profile)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -78,7 +62,7 @@ class EditProfileView(LoginRequiredMixin, UpdateView):
 
     model = User
     template_name = 'blog/user.html'
-    fields = ['first_name', 'last_name', 'username', 'email']
+    fields = ('first_name', 'last_name', 'username', 'email')
 
     def get_object(self, queryset=None):
         return self.request.user
@@ -134,14 +118,13 @@ class PostDetailView(DetailView):
 
     model = Post
     template_name = 'blog/detail.html'
-    pk_url_kwarg = 'post_id'
-    queryset = get_post_queryset(apply_annotations=True)
+    queryset = get_post_queryset(apply_annotations=False)
 
     def get_object(self, queryset=None):
         queryset = self.get_queryset()
         post = get_object_or_404(
             queryset.select_related('author', 'category', 'location'),
-            pk=self.kwargs[self.pk_url_kwarg]
+            pk=self.kwargs['post_id']
         )
 
         user = self.request.user
@@ -154,7 +137,7 @@ class PostDetailView(DetailView):
         if is_not_author and (is_unpublished
                               or is_category_unpublished
                               or is_future):
-            raise Http404("Пост недоступен")
+            raise Http404('Пост недоступен')
 
         return post
 
@@ -170,7 +153,7 @@ class CategoryPostView(ListView):
 
     template_name = 'blog/category.html'
     context_object_name = 'page_obj'
-    paginate_by = settings.CONST
+    paginate_by = settings.PAGINATION_SIZE
 
     def get_category(self):
         return get_object_or_404(
@@ -181,7 +164,9 @@ class CategoryPostView(ListView):
 
     def get_queryset(self):
         category = self.get_category()
-        return get_post_queryset(apply_filters=True).filter(category=category)
+        return get_post_queryset(
+            apply_filters=True, apply_annotations=True
+        ).filter(category=category)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -193,7 +178,7 @@ class IndexView(ListView):
     """The view for the main page."""
 
     template_name = 'blog/index.html'
-    paginate_by = settings.CONST
+    paginate_by = settings.PAGINATION_SIZE
     queryset = get_post_queryset(apply_filters=True, apply_annotations=True)
     context_object_name = 'page_obj'
 
